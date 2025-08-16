@@ -5,103 +5,102 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>RAZONAMIENTO NUMÉRICO</title>
   <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:0; display:flex; flex-direction:column; align-items:center; background:#f4f4f4; }
-    header { width:100%; background:#333; color:#fff; text-align:center; padding:10px 12px; position:fixed; top:0; z-index:10; display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap; }
-    header #timer { font-size:1.5em; margin:0; font-weight:700; }
-    header button { background:#fff; color:#333; border:0; border-radius:8px; padding:8px 12px; cursor:pointer; }
-    #msg { width:100%; text-align:center; margin-top:70px; font-weight:600; }
-    iframe { margin-top:60px; width:100%; height:calc(100vh - 60px); border:none; }
+    body { font-family: Arial, sans-serif; margin:0; display:flex; flex-direction:column; }
+    header {
+      position:fixed; top:0; left:0; right:0; z-index:10;
+      background:#333; color:#fff; display:flex; gap:12px; flex-wrap:wrap;
+      align-items:center; justify-content:center; padding:8px 10px;
+    }
+    header button { background:#fff; color:#333; border:0; border-radius:8px; padding:6px 10px; cursor:pointer; }
+    #timer { font-size:1.4em; font-weight:700; }
+    #status { font-weight:600; }
+    iframe { margin-top:56px; width:100%; height:calc(100vh - 56px); border:none; }
   </style>
 </head>
 <body>
   <header>
-    <p id="instruction" style="margin:0;">Tiempo restante:&nbsp;</p>
-    <p id="timer" style="margin:0;">00:00</p>
-    <button id="enable-auto" title="Evita bloqueos de pop-ups">Activar auto-continuación</button>
+    <span>Tiempo restante: <span id="timer">00:00</span></span>
+    <button id="prep" title="Evita bloqueo de pop-ups">Activar auto-continuación</button>
+    <span id="status"></span>
   </header>
 
-  <p id="msg"></p>
-
-  <!-- Usa la URL LARGA del form con ?embedded=true -->
-  <iframe id="form-iframe" src="https://docs.google.com/forms/d/e/1FAIpQLScRLd3IAtQQ86_JTFi-FtNUT424vJw-eiEQW_87-QW8Tq-Wgw/viewform?usp=dialog"></iframe>
+  <!-- Cambia este src por el de CADA Google Form -->
+  <iframe id="form" src="https://forms.gle/mEBi9BWpQDiMGT7t6"></iframe>
 
   <script>
-    // ====== CONFIGURA ESTO ======
-    const NEXT_URL = "https://jacosta-25.github.io/RazonamientoVerbal/https://jacosta-25.github.io/RazonamientoVerbal/"; // <- URL de la próxima prueba
-    const TOTAL_TIME = 25 * 60; // 25 minutos en segundos
-    // ============================
+    /************* CONFIG *************/
+    const TOTAL_TIME = 25 * 60; // 25min
+    // Puedes sobreescribir con ?next=... en la URL si quieres encadenar dinámicamente
+    const NEXT_URL = new URLSearchParams(location.search).get("next") || "https://jacosta-25.github.io/RazonamientoAbstracto/";
 
-    const timerElement = document.getElementById("timer");
-    const msg = document.getElementById("msg");
-    const iframe = document.getElementById("form-iframe");
+    /************* TIMER *************/
+    const timerEl = document.getElementById("timer");
+    const qs = new URLSearchParams(location.search);
+    let start = qs.get("startTime") ? parseInt(qs.get("startTime"),10) : Date.now();
+    if (!qs.get("startTime")) { qs.set("startTime", String(start)); history.replaceState({}, "", `${location.pathname}?${qs}`); }
 
-    // --- (1) Temporizador persistente por URL ---
-    function getUrlParameter(name){ return new URLSearchParams(location.search).get(name); }
-    function updateUrlParameter(k,v){ const url = new URL(location.href); url.searchParams.set(k,v); history.replaceState({}, "", url); }
-
-    const startTimeParam = getUrlParameter("startTime");
-    let startTime = startTimeParam ? parseInt(startTimeParam,10) : Date.now();
-    if(!startTimeParam) updateUrlParameter("startTime", startTime);
-
-    function updateTimer(){
-      const elapsed = Math.floor((Date.now() - startTime)/1000);
-      const remaining = TOTAL_TIME - elapsed;
-      if(remaining > 0){
-        const m = Math.floor(remaining/60), s = remaining % 60;
-        timerElement.textContent = `${m}:${s<10?"0":""}${s}`;
+    function tick(){
+      const rem = TOTAL_TIME - Math.floor((Date.now()-start)/1000);
+      if (rem > 0) {
+        const m = Math.floor(rem/60), s = rem % 60;
+        timerEl.textContent = `${m}:${s<10?"0":""}${s}`;
       } else {
-        timerElement.textContent = "00:00";
-        finalizarFormulario();
-        clearInterval(timerInterval);
+        timerEl.textContent = "00:00";
+        alert("El tiempo ha expirado. Este formulario ya no está disponible.");
+        document.getElementById("form").src = ""; // limpiar
+        clearInterval(tid);
       }
     }
-    function finalizarFormulario(){
-      alert("El tiempo ha expirado. Este formulario ya no está disponible.");
-      iframe.src = ""; // Limpia el iframe
-    }
-    updateTimer();
-    const timerInterval = setInterval(updateTimer, 1000);
+    tick(); const tid = setInterval(tick, 1000);
 
-    // --- (2) Abrir siguiente prueba automáticamente ---
-    // Truco anti-bloqueo: pre-abrimos una pestaña en un gesto del usuario y luego la redirigimos
+    /************* AUTO-CONTINUACIÓN *************/
+    const iframe = document.getElementById("form");
+    const statusEl = document.getElementById("status");
+
+    // 1) Preabrir pestaña para evitar bloqueos
     let nextWin = null;
-    document.getElementById("enable-auto").addEventListener("click", () => {
-      if(!nextWin || nextWin.closed){
+    document.getElementById("prep").addEventListener("click", () => {
+      if (!NEXT_URL) { alert("Configura NEXT_URL o usa ?next=..."); return; }
+      if (!nextWin || nextWin.closed) {
         nextWin = window.open("about:blank", "_blank");
-        if(nextWin){
-          nextWin.document.write("<title>Próxima prueba</title><p>Esperando envío...</p>");
+        if (nextWin) {
+          nextWin.document.write("<title>Próxima prueba</title><p>Esperando envío…</p>");
           nextWin.document.close();
-          alert("Listo. Cuando envíes el formulario se cargará la próxima prueba en la pestaña nueva.");
+          alert("Listo. Cuando envíes el formulario, se cargará la siguiente prueba.");
         } else {
-          alert("El navegador bloqueó la ventana. Permite pop-ups para este sitio.");
+          alert("El navegador bloqueó la pestaña. Permite pop-ups para este sitio.");
         }
       } else {
-        alert("La pestaña ya está abierta y lista. Envía el formulario para continuar.");
+        alert("La pestaña ya está lista. Envía el formulario cuando quieras.");
       }
     });
 
-    // Detectar envío: el iframe carga la página de confirmación -> evento load otra vez
-    let loadCount = 0;
-    let alreadyHandled = false;
-
+    // 2) Detectar envío con el 'load' del iframe (sin leer su contenido)
+    let ready = false, handled = false, settle = null;
     iframe.addEventListener("load", () => {
-      loadCount++;
-      // Con la URL larga (viewform?embedded=true):
-      //   - 1a carga: el formulario
-      //   - 2a carga: la confirmación tras enviar
-      if(!alreadyHandled && loadCount >= 2){
-        alreadyHandled = true;
-        // Redirige la pestaña pre-abierta si existe; si no, intenta abrir ahora
-        if(nextWin && !nextWin.closed){
-          nextWin.location.href = NEXT_URL;
-        } else {
-          const w = window.open(NEXT_URL, "_blank");
-          if(!w){
-            msg.innerHTML = `Respuesta enviada. <a href="${NEXT_URL}" target="_blank" rel="noopener">Abrir próxima prueba</a>`;
-          }
-        }
+      // forms.gle suele redirigir al cargar: esperamos ~1.5s para considerar "listo"
+      if (!ready) {
+        if (settle) clearTimeout(settle);
+        settle = setTimeout(() => { ready = true; }, 1500);
+        return;
       }
+      if (handled) return;
+      handled = true;
+      statusEl.textContent = "¡Respuesta enviada! Abriendo…";
+      openNext();
     });
+
+    function openNext(){
+      if (!NEXT_URL) return;
+      // Si preabrimos, redirige esa pestaña
+      if (nextWin && !nextWin.closed) {
+        nextWin.location.href = NEXT_URL;
+      } else {
+        // Intento nueva pestaña; si la bloquean, abrir en misma pestaña
+        const w = window.open(NEXT_URL, "_blank");
+        if (!w) window.location.href = NEXT_URL;
+      }
+    }
   </script>
 </body>
 </html>
